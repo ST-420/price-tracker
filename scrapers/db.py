@@ -117,6 +117,20 @@ def match_or_create_listing(
 ) -> tuple[int, str | None]:
     """Finds a matching product for this listing (rules 1-3) or creates a new
     one (rule 4). Returns (product_id, match_method)."""
+    # Same exact URL already saved (e.g. the same product surfaced under two
+    # different search terms on the same store) is unambiguously the same
+    # listing — reuse its product without going through the matching rules,
+    # and without touching its match_method (that reflects how it was first
+    # linked to other stores, which this repeat sighting says nothing new
+    # about).
+    cur.execute(
+        "SELECT product_id, match_method FROM listings WHERE store = %s AND url = %s;",
+        (store, url),
+    )
+    row = cur.fetchone()
+    if row:
+        return row[0], row[1]
+
     match_method = None
     product_id = _find_match_by_upc(cur, category, store, upc)
     if product_id:
