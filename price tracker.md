@@ -52,9 +52,9 @@ A website where a user searches a phone or laptop and sees:
 - [x] Initialize Next.js project, connect to GitHub — https://github.com/ST-420/price-tracker
 
 ### Phase 2 — Database
-- [ ] Create the three tables in Supabase
-- [ ] Write a script that imports `products.csv` into `products` and `listings`
-- [ ] Verify rows appear in the Supabase dashboard
+- [x] Create the three tables in Supabase — `schema.sql`, run via `scripts/create_tables.py`
+- [x] Write a script that imports `products.csv` into `products` and `listings` — `scripts/import_products.py`
+- [x] Verify rows appear in the Supabase dashboard — 4 template products confirmed (no listings yet, since URLs are still blank)
 
 ### Phase 3 — Price fetchers (one file per store, using Scrapy + crawl4ai)
 - [ ] `fetch_bestbuy.py` — Scrapy + crawl4ai scraper, updates `listings.current_price` and inserts into `price_history`
