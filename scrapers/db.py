@@ -149,6 +149,24 @@ def match_or_create_listing(
             if product_id:
                 match_method = "attributes"
 
+    if product_id and match_method:
+        # This new listing matched an existing product — but that product's
+        # other listing(s) may predate any match ever being found (created
+        # back when they were the only listing, so match_method was left
+        # null). A match is symmetric: it confirms both sides belong
+        # together, so retroactively mark them matched too, or they'd wrongly
+        # stay hidden from the comparison page (see scrapers/attributes.py /
+        # get_listings in the website, which only shows match_method IS NOT
+        # NULL listings) even though they're demonstrably part of a
+        # confirmed cross-store product now.
+        cur.execute(
+            """
+            UPDATE listings SET match_method = %s, match_confidence = %s
+            WHERE product_id = %s AND match_method IS NULL;
+            """,
+            (match_method, CONFIDENCE.get(match_method), product_id),
+        )
+
     if not product_id:
         brand = attrs.get("brand") or title.split()[0]
         model_name = attrs.get("model_name") or title
