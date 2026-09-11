@@ -27,7 +27,7 @@ load_dotenv(dotenv_path=ROOT / ".env")
 
 LOOKBACK_DAYS = 180
 MAX_SNAPSHOTS_PER_LISTING = 20
-CDX_API = "http://web.archive.org/cdx/search/cdx"
+CDX_API = "https://web.archive.org/cdx/search/cdx"
 HEADERS = {"User-Agent": "price-tracker-backfill/1.0 (personal project)"}
 
 
@@ -72,7 +72,7 @@ def list_snapshots(url: str) -> list[tuple[str, str]]:
 
 
 def fetch_snapshot_html(timestamp: str, original_url: str) -> str | None:
-    snapshot_url = f"http://web.archive.org/web/{timestamp}/{original_url}"
+    snapshot_url = f"https://web.archive.org/web/{timestamp}/{original_url}"
     resp = requests.get(snapshot_url, headers=HEADERS, timeout=30)
     if resp.status_code != 200:
         return None
