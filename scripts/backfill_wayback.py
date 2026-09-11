@@ -29,6 +29,25 @@ LOOKBACK_DAYS = 180
 MAX_SNAPSHOTS_PER_LISTING = 20
 CDX_API = "https://web.archive.org/cdx/search/cdx"
 HEADERS = {"User-Agent": "price-tracker-backfill/1.0 (personal project)"}
+REQUEST_DELAY_SECONDS = 2.5
+
+SESSION = requests.Session()
+SESSION.headers.update(HEADERS)
+
+
+def _request_with_retry(method: str, url: str, retries: int = 4, **kwargs) -> requests.Response:
+    """This environment's network occasionally refuses new connections after
+    a burst of requests (seen mid-run against archive.org) — back off and
+    retry rather than treating one blip as a permanent failure."""
+    last_error = None
+    for attempt in range(1, retries + 1):
+        try:
+            return SESSION.request(method, url, **kwargs)
+        except requests.exceptions.ConnectionError as e:
+            last_error = e
+            if attempt < retries:
+                time.sleep(5 * attempt)
+    raise last_error
 
 
 def canonicalize_url(store: str, url: str) -> str:
@@ -46,7 +65,8 @@ def list_snapshots(url: str) -> list[tuple[str, str]]:
     MAX_SNAPSHOTS_PER_LISTING if there are more than that available."""
     since = (datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)).strftime("%Y%m%d")
     until = datetime.now(timezone.utc).strftime("%Y%m%d")
-    resp = requests.get(
+    resp = _request_with_retry(
+        "GET",
         CDX_API,
         params={
             "url": url,
@@ -57,7 +77,6 @@ def list_snapshots(url: str) -> list[tuple[str, str]]:
             "filter": "statuscode:200",
             "limit": 200,
         },
-        headers=HEADERS,
         timeout=20,
     )
     resp.raise_for_status()
@@ -73,7 +92,7 @@ def list_snapshots(url: str) -> list[tuple[str, str]]:
 
 def fetch_snapshot_html(timestamp: str, original_url: str) -> str | None:
     snapshot_url = f"https://web.archive.org/web/{timestamp}/{original_url}"
-    resp = requests.get(snapshot_url, headers=HEADERS, timeout=30)
+    resp = _request_with_retry("GET", snapshot_url, timeout=30)
     if resp.status_code != 200:
         return None
     return resp.text
@@ -159,7 +178,7 @@ def main():
                     inserted_for_listing += 1
                     total_points += 1
 
-                time.sleep(1)  # go easy on archive.org
+                time.sleep(REQUEST_DELAY_SECONDS)  # go easy on archive.org / this env's connection limits
 
             if inserted_for_listing:
                 products_backfilled.add(product_id)
