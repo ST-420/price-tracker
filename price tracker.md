@@ -18,7 +18,7 @@ A website where a user searches a phone or laptop and sees:
 ## Stack
 - Website + API: Next.js, deployed on Vercel
 - Database: Supabase (Postgres)
-- Price fetchers: Python scripts using crawl4ai (open-source, browser-based scraper) for Amazon, Best Buy, and Walmart
+- Price fetchers: Python scripts using Scrapy (crawling/scheduling/retries) + crawl4ai (browser-based scraping for JS-heavy pages) for Amazon, Best Buy, and Walmart. Both are free/open-source — no daily request cap, unlike hosted scraping APIs (e.g. krawly.io, capped at 30 free requests/day — not enough for ~100 products × 3 stores).
 - Scheduler: GitHub Actions, runs fetchers once a day
 - Secrets: `.env` file locally, GitHub Secrets and Vercel env vars in production. Never hardcode keys.
 
@@ -56,10 +56,10 @@ A website where a user searches a phone or laptop and sees:
 - [ ] Write a script that imports `products.csv` into `products` and `listings`
 - [ ] Verify rows appear in the Supabase dashboard
 
-### Phase 3 — Price fetchers (one file per store, using crawl4ai)
-- [ ] `fetch_bestbuy.py` — crawl4ai scraper, updates `listings.current_price` and inserts into `price_history`
-- [ ] `fetch_walmart.py` — crawl4ai scraper
-- [ ] `fetch_amazon.py` — crawl4ai scraper
+### Phase 3 — Price fetchers (one file per store, using Scrapy + crawl4ai)
+- [ ] `fetch_bestbuy.py` — Scrapy + crawl4ai scraper, updates `listings.current_price` and inserts into `price_history`
+- [ ] `fetch_walmart.py` — Scrapy + crawl4ai scraper
+- [ ] `fetch_amazon.py` — Scrapy + crawl4ai scraper
 - [ ] Each script logs success/failure per product and never crashes the whole run on one bad product
 
 ### Phase 4 — Scheduler
