@@ -2,12 +2,13 @@
 
 For each search term in queries.py, fetches one search-results page (which
 already carries title + price + link for ~20-60 products at once — far
-cheaper than visiting every product page individually) and takes the best
-genuine (non-sponsored, non-refurbished) result. Then visits that one
-product's own detail page for its UPC and Brand fields (Amazon's search
-results don't expose these; its product pages reliably do — see
-price tracker.md > Scope for why this is the identifier used for matching).
-Logs and skips anything that fails instead of crashing the whole run.
+cheaper than visiting every product page individually) and takes the top
+few genuine (non-sponsored, non-refurbished) results (CANDIDATES_PER_TERM).
+For each one, visits that product's own detail page for its UPC and Brand
+fields (Amazon's search results don't expose these; its product pages
+reliably do — see price tracker.md > Scope for why this is the identifier
+used for matching). Logs and skips anything that fails instead of crashing
+the whole run.
 """
 
 import asyncio
@@ -27,10 +28,16 @@ BASE_URL = "https://www.amazon.com"
 SKIP_TITLE_WORDS = ("renewed", "refurbished", "used", "open box", "pre-owned")
 
 
+CANDIDATES_PER_TERM = 3
+
+
 def extract_products(html: str) -> list[dict]:
     """Returns genuine (non-sponsored, non-refurbished) organic results, best
-    match first. Callers should generally just take items[0] — one canonical
-    listing per search term, not every color/storage variant on the page."""
+    match first. Callers process the top few (see CANDIDATES_PER_TERM) — with
+    just one, there's almost no chance it happens to be the exact same
+    configuration Best Buy's top result for the same term is, so barely
+    anything ever cross-store-matches. More candidates means more chance of a
+    real overlap for the matching rules to find."""
     soup = BeautifulSoup(html, "html.parser")
     items = []
     for card in soup.select('div[data-component-type="s-search-result"]'):
@@ -109,40 +116,40 @@ async def run():
                         await asyncio.sleep(random.uniform(3, 6))
                         continue
                     found += 1
-                    item = items[0]  # best organic match for this search term
 
-                    attrs = attributes.parse(item["title"], brand_hint=term)
-                    upc = None
-                    await asyncio.sleep(random.uniform(2, 4))
-                    detail_ok, detail_html = await fetch_html(
-                        item["url"], wait_for_selector="#productTitle", magic=False
-                    )
-                    if detail_ok:
-                        detail = extract_detail_page_data(detail_html)
-                        upc = detail["upc"]
-                        if detail["brand"]:
-                            attrs["brand"] = detail["brand"]
-                    else:
-                        print(f"[{STORE}] detail page failed for '{item['title']}' — matching on attributes only")
-
-                    try:
-                        product_id, match_method = db.match_or_create_listing(
-                            cur, category, STORE, item["url"], item["price"], item["title"],
-                            upc, None, attrs,
+                    for item in items[:CANDIDATES_PER_TERM]:
+                        attrs = attributes.parse(item["title"], brand_hint=term)
+                        upc = None
+                        await asyncio.sleep(random.uniform(2, 4))
+                        detail_ok, detail_html = await fetch_html(
+                            item["url"], wait_for_selector="#productTitle", magic=False
                         )
-                        db.upsert_listing_price(
-                            cur, product_id, STORE, item["url"], item["price"],
-                            match_method, upc, None, attrs,
-                        )
-                        conn.commit()
-                        saved += 1
-                        print(f"[{STORE}] saved '{item['title'][:50]}' match_method={match_method}")
-                    except Exception as e:
-                        conn.rollback()
-                        print(f"[{STORE}] FAILED to save '{item['title']}': {e}")
-                        failed += 1
+                        if detail_ok:
+                            detail = extract_detail_page_data(detail_html)
+                            upc = detail["upc"]
+                            if detail["brand"]:
+                                attrs["brand"] = detail["brand"]
+                        else:
+                            print(f"[{STORE}] detail page failed for '{item['title']}' — matching on attributes only")
 
-                    await asyncio.sleep(random.uniform(3, 6))
+                        try:
+                            product_id, match_method = db.match_or_create_listing(
+                                cur, category, STORE, item["url"], item["price"], item["title"],
+                                upc, None, attrs,
+                            )
+                            db.upsert_listing_price(
+                                cur, product_id, STORE, item["url"], item["price"],
+                                match_method, upc, None, attrs,
+                            )
+                            conn.commit()
+                            saved += 1
+                            print(f"[{STORE}] saved '{item['title'][:50]}' match_method={match_method}")
+                        except Exception as e:
+                            conn.rollback()
+                            print(f"[{STORE}] FAILED to save '{item['title']}': {e}")
+                            failed += 1
+
+                        await asyncio.sleep(random.uniform(3, 6))
     finally:
         conn.close()
 

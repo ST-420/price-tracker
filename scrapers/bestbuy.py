@@ -26,11 +26,18 @@ BASE_URL = "https://www.bestbuy.com"
 SKIP_TITLE_WORDS = ("renewed", "refurbished", "used", "open box", "pre-owned", "geek squad certified")
 
 
+CANDIDATES_PER_TERM = 5
+
+
 def extract_products(html: str) -> list[dict]:
     """Returns genuine, non-refurbished organic results, page order (which is
-    Best Buy's own relevance ranking). Callers should generally just take
-    items[0] — one canonical listing per search term, not every color/storage
-    variant on the page."""
+    Best Buy's own relevance ranking). Callers process the top few (see
+    CANDIDATES_PER_TERM) — with just one, there's almost no chance it happens
+    to be the exact same configuration Amazon's top result for the same term
+    is, so barely anything ever cross-store-matches. More candidates means
+    more chance of a real overlap for the matching rules to find. No extra
+    request cost here (unlike amazon.py) since price/model-number is already
+    on this page for every card."""
     soup = BeautifulSoup(html, "html.parser")
     items = []
     for card in soup.select('div[data-testid="ECL-ProductCard"]'):
@@ -94,30 +101,30 @@ async def run():
                         await asyncio.sleep(random.uniform(3, 6))
                         continue
                     found += 1
-                    item = items[0]  # best organic match for this search term
 
                     model_numbers = extract_model_numbers(html)
-                    normalized_title = re.sub(r"\s+", " ", item["title"]).strip().lower()
-                    model_number = model_numbers.get(normalized_title)
+                    for item in items[:CANDIDATES_PER_TERM]:
+                        normalized_title = re.sub(r"\s+", " ", item["title"]).strip().lower()
+                        model_number = model_numbers.get(normalized_title)
 
-                    attrs = attributes.parse(item["title"], brand_hint=term)
+                        attrs = attributes.parse(item["title"], brand_hint=term)
 
-                    try:
-                        product_id, match_method = db.match_or_create_listing(
-                            cur, category, STORE, item["url"], item["price"], item["title"],
-                            None, model_number, attrs,
-                        )
-                        db.upsert_listing_price(
-                            cur, product_id, STORE, item["url"], item["price"],
-                            match_method, None, model_number, attrs,
-                        )
-                        conn.commit()
-                        saved += 1
-                        print(f"[{STORE}] saved '{item['title'][:50]}' match_method={match_method}")
-                    except Exception as e:
-                        conn.rollback()
-                        print(f"[{STORE}] FAILED to save '{item['title']}': {e}")
-                        failed += 1
+                        try:
+                            product_id, match_method = db.match_or_create_listing(
+                                cur, category, STORE, item["url"], item["price"], item["title"],
+                                None, model_number, attrs,
+                            )
+                            db.upsert_listing_price(
+                                cur, product_id, STORE, item["url"], item["price"],
+                                match_method, None, model_number, attrs,
+                            )
+                            conn.commit()
+                            saved += 1
+                            print(f"[{STORE}] saved '{item['title'][:50]}' match_method={match_method}")
+                        except Exception as e:
+                            conn.rollback()
+                            print(f"[{STORE}] FAILED to save '{item['title']}': {e}")
+                            failed += 1
 
                     await asyncio.sleep(random.uniform(3, 6))
     finally:
