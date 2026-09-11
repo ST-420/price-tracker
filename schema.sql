@@ -50,12 +50,16 @@ CREATE TABLE IF NOT EXISTS listings (
     UNIQUE (product_id, store)
 );
 
--- One row per price check — builds the price-over-time chart.
+-- One row per price check — builds the price-over-time chart. source is
+-- 'live' for the regular daily scraper, 'wayback' for rows backfilled from
+-- Wayback Machine snapshots (scripts/backfill_wayback.py) — a one-time
+-- historical fill, not something the daily job produces.
 CREATE TABLE IF NOT EXISTS price_history (
     id bigserial PRIMARY KEY,
     listing_id bigint NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
     price numeric(10, 2) NOT NULL,
-    recorded_at timestamptz NOT NULL DEFAULT now()
+    recorded_at timestamptz NOT NULL DEFAULT now(),
+    source text NOT NULL DEFAULT 'live' CHECK (source IN ('live', 'wayback'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_listings_product_id ON listings(product_id);

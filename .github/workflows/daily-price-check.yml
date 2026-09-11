@@ -1,8 +1,9 @@
-name: Daily price check
+name: Price check (twice daily)
 
 on:
   schedule:
-    - cron: "0 9 * * *" # once a day, 9am UTC
+    - cron: "0 9 * * *" # twice a day, 9am and 9pm UTC
+    - cron: "0 21 * * *"
   workflow_dispatch: {} # lets us trigger it manually from the Actions tab, for testing
 
 jobs:
