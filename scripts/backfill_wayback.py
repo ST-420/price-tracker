@@ -30,6 +30,11 @@ MAX_SNAPSHOTS_PER_LISTING = 20
 CDX_API = "https://web.archive.org/cdx/search/cdx"
 HEADERS = {"User-Agent": "price-tracker-backfill/1.0 (personal project)"}
 REQUEST_DELAY_SECONDS = 2.5
+# A real phone or laptop is never actually this cheap — a lower figure means
+# the extractor grabbed the wrong element on that particular archived page
+# (e.g. an accessory, a coupon amount, a monthly installment figure). Same
+# floor as the live scrapers (scrapers/amazon.py etc).
+MIN_PLAUSIBLE_PRICE = 30
 
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
@@ -176,6 +181,10 @@ def main():
                     price = EXTRACTORS[store](html) if html else None
                 except Exception as e:
                     print(f"[{store}] listing {listing_id} @ {timestamp}: fetch/parse failed: {e}")
+                    price = None
+
+                if price is not None and price < MIN_PLAUSIBLE_PRICE:
+                    print(f"[{store}] listing {listing_id} @ {timestamp}: implausible price ${price}, skipping")
                     price = None
 
                 if price is not None:
