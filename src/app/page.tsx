@@ -1,15 +1,18 @@
 import Link from "next/link";
-import { searchProducts } from "@/lib/db";
-import ProductImage from "@/components/ProductImage";
+import { browseCategory, searchProducts } from "@/lib/db";
+import ProductCard from "@/components/ProductCard";
 
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; cat?: string }>;
 }) {
-  const { q } = await searchParams;
+  const { q, cat } = await searchParams;
   const query = q?.trim() ?? "";
+  const category = cat === "phone" || cat === "laptop" ? cat : null;
+
   const results = query.length > 0 ? await searchProducts(query) : [];
+  const browsed = !query && category ? await browseCategory(category) : [];
 
   return (
     <div className="min-h-screen" style={{ background: "var(--background)" }}>
@@ -58,10 +61,39 @@ export default async function Home({
           </button>
         </form>
 
-        <div className="mt-10">
-          {query.length === 0 && (
+        {!query && (
+          <div className="mt-4 flex gap-2">
+            {(["phone", "laptop"] as const).map((c) => (
+              <Link
+                key={c}
+                href={`/?cat=${c}`}
+                className="rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors"
+                style={{
+                  borderColor: category === c ? "var(--accent)" : "var(--border)",
+                  color: category === c ? "var(--accent)" : "var(--text-secondary)",
+                  background: "var(--surface)",
+                }}
+              >
+                {c}s
+              </Link>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-8">
+          {!query && !category && (
             <div className="rounded-xl border border-dashed px-6 py-16 text-center" style={{ borderColor: "var(--border)" }}>
-              <p style={{ color: "var(--text-muted)" }}>Start typing above to search the catalog.</p>
+              <p style={{ color: "var(--text-muted)" }}>
+                Search above, or browse{" "}
+                <Link href="/?cat=phone" className="font-medium underline" style={{ color: "var(--accent)" }}>
+                  phones
+                </Link>{" "}
+                and{" "}
+                <Link href="/?cat=laptop" className="font-medium underline" style={{ color: "var(--accent)" }}>
+                  laptops
+                </Link>
+                .
+              </p>
             </div>
           )}
 
@@ -73,36 +105,16 @@ export default async function Home({
             </div>
           )}
 
-          {results.length > 0 && (
+          {!query && category && browsed.length === 0 && (
+            <div className="rounded-xl border border-dashed px-6 py-16 text-center" style={{ borderColor: "var(--border)" }}>
+              <p style={{ color: "var(--text-muted)" }}>No {category}s in the catalog yet.</p>
+            </div>
+          )}
+
+          {(results.length > 0 || browsed.length > 0) && (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-              {results.map((product) => (
-                <Link
-                  key={product.id}
-                  href={`/product/${product.id}`}
-                  className="group flex flex-col overflow-hidden rounded-xl border transition-shadow hover:shadow-md"
-                  style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-                >
-                  <div
-                    className="flex aspect-square items-center justify-center p-4"
-                    style={{ background: "var(--surface-raised)" }}
-                  >
-                    <ProductImage src={product.image_url} alt={product.name} size={140} />
-                  </div>
-                  <div className="flex flex-1 flex-col gap-1 p-3">
-                    <span
-                      className="w-fit rounded-full px-2 py-0.5 text-[10px] font-medium capitalize"
-                      style={{ background: "var(--surface-raised)", color: "var(--text-muted)" }}
-                    >
-                      {product.category}
-                    </span>
-                    <span
-                      className="line-clamp-2 text-sm font-medium leading-snug"
-                      style={{ color: "var(--text-primary)" }}
-                    >
-                      {product.name}
-                    </span>
-                  </div>
-                </Link>
+              {(query ? results : browsed).map((product) => (
+                <ProductCard key={product.id} product={product} />
               ))}
             </div>
           )}

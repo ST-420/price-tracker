@@ -76,10 +76,11 @@ A website where a user searches a phone or laptop and sees:
 - Not done in this phase: Best Buy's official API integration (deferred — see Data sources), a review/undo step for mismatched products (none exists yet)
 
 ### Phase 4 — Scheduler
-- [x] GitHub Actions workflow runs all three fetchers daily — `.github/workflows/daily-price-check.yml`, 9am UTC, also runnable manually from the Actions tab
+- [x] GitHub Actions workflow runs all three fetchers twice daily — `.github/workflows/daily-price-check.yml`, 9am and 9pm UTC, also runnable manually from the Actions tab
 - [x] Store Supabase and API keys as GitHub Secrets — `SUPABASE_DB_URL`
-- [ ] Confirm price_history grows by one row per listing per day — first manual run tested end-to-end (real rows landed in Supabase); still need to see the scheduled (not manually-triggered) run fire and repeat over a few real days
-- Start this as early as possible — the chart needs weeks of data
+- [ ] Confirm price_history grows by one row per listing per run — manual runs tested end-to-end (real rows landed in Supabase, including a listing checked 4x in one session showing 4 distinct price_history points); still need to see the scheduled (not manually-triggered) runs fire and repeat over a few real days
+- [x] One-time historical backfill from Wayback Machine — `scripts/backfill_wayback.py` (not part of the daily job). Pulls real archived snapshots of each Amazon/Best Buy product page from the last ~180 days and extracts their price, tagged `source='wayback'` in `price_history` (vs `'live'` for the regular scraper) — gives the chart real history immediately instead of waiting weeks for the daily job alone
+- Start the scheduler as early as possible — the chart needs weeks of `live` data on top of whatever the one-time backfill covers
 
 ### Phase 5 — Website
 - [x] Search page: text box, results list — `src/app/page.tsx`

@@ -36,21 +36,45 @@ export type Product = {
   image_url: string | null;
 };
 
+export type ProductWithPrice = Product & {
+  lowest_price: string | null;
+  store_count: number;
+};
+
 export type PricePoint = {
   store: string;
   price: string;
   recorded_at: string;
 };
 
-export async function searchProducts(query: string): Promise<Product[]> {
-  const { rows } = await pool.query<Product>(
-    `SELECT DISTINCT p.id, p.brand, p.model, p.category, p.name, p.image_url
+export async function searchProducts(query: string): Promise<ProductWithPrice[]> {
+  const { rows } = await pool.query<ProductWithPrice>(
+    `SELECT p.id, p.brand, p.model, p.category, p.name, p.image_url,
+            min(l.current_price) AS lowest_price,
+            count(l.id) AS store_count
      FROM products p
      JOIN listings l ON l.product_id = p.id
      WHERE p.name ILIKE $1
+     GROUP BY p.id
      ORDER BY p.name
      LIMIT 30;`,
     [`%${query}%`]
+  );
+  return rows;
+}
+
+export async function browseCategory(category: "phone" | "laptop"): Promise<ProductWithPrice[]> {
+  const { rows } = await pool.query<ProductWithPrice>(
+    `SELECT p.id, p.brand, p.model, p.category, p.name, p.image_url,
+            min(l.current_price) AS lowest_price,
+            count(l.id) AS store_count
+     FROM products p
+     JOIN listings l ON l.product_id = p.id
+     WHERE p.category = $1
+     GROUP BY p.id
+     ORDER BY count(l.id) DESC, p.name
+     LIMIT 12;`,
+    [category]
   );
   return rows;
 }
