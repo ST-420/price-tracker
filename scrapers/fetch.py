@@ -24,7 +24,9 @@ def looks_blocked(html_or_markdown: str) -> bool:
     return any(signal in text for signal in BLOCK_SIGNALS)
 
 
-async def fetch_html(url: str, wait_for_selector: str | None = None, retries: int = 2) -> tuple[bool, str]:
+async def fetch_html(
+    url: str, wait_for_selector: str | None = None, retries: int = 2, magic: bool = True
+) -> tuple[bool, str]:
     """Returns (ok, html). ok is False if every attempt failed or was blocked.
 
     Block-detection only scans the rendered page text (markdown), not the raw
@@ -37,11 +39,17 @@ async def fetch_html(url: str, wait_for_selector: str | None = None, retries: in
     stores' product grids render asynchronously after the initial page load,
     so without this the page can be captured before any products show up —
     this happened intermittently on Best Buy during testing.
+
+    magic: crawl4ai's bot-evasion mode (simulated scrolling/clicking). Needed
+    on search-results pages to get past Amazon/Best Buy's detection, but it
+    causes an unwanted navigation/crash on Amazon's *product* pages specfically
+    (their interactive elements — image carousel, variant pickers — seem to
+    trigger it). Pass magic=False for individual product-page fetches.
     """
     run_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
-        magic=True,
-        simulate_user=True,
+        magic=magic,
+        simulate_user=magic,
         page_timeout=30000,
         wait_for=f"css:{wait_for_selector}" if wait_for_selector else None,
     )

@@ -18,7 +18,7 @@ import re
 
 from bs4 import BeautifulSoup
 
-from . import db
+from . import attributes, db
 from .fetch import fetch_html
 from .queries import CATALOG_CAP, SEARCH_QUERIES
 
@@ -82,9 +82,16 @@ async def run():
                     found += 1
 
                     item = items[0]  # best organic match for this search term
+                    attrs = attributes.parse(item["title"], brand_hint=term)
                     try:
-                        product_id = db.find_or_create_product(cur, term, category, item["title"])
-                        db.upsert_listing_price(cur, product_id, STORE, item["url"], item["price"])
+                        product_id, match_method = db.match_or_create_listing(
+                            cur, category, STORE, item["url"], item["price"], item["title"],
+                            None, None, attrs,
+                        )
+                        db.upsert_listing_price(
+                            cur, product_id, STORE, item["url"], item["price"],
+                            match_method, None, None, attrs,
+                        )
                         conn.commit()
                         saved += 1
                     except Exception as e:

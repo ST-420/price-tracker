@@ -1,6 +1,13 @@
 """Discovers and price-checks phones/laptops on Best Buy. Same approach as
 amazon.py — one search-results page yields many products' title+price+link
-at once. See that file's docstring for the overall design."""
+at once. See that file's docstring for the overall design.
+
+Best Buy's search results page embeds each product's real manufacturer model
+number in an internal JSON blob (Apollo GraphQL cache), so — unlike Amazon —
+no extra product-page visit is needed. That's fortunate, because Best Buy's
+individual product pages are blocked entirely from this environment (tested
+against several real product URLs, all failed with a network-level error).
+"""
 
 import asyncio
 import random
@@ -8,7 +15,7 @@ import re
 
 from bs4 import BeautifulSoup
 
-from . import db
+from . import attributes, db
 from .fetch import fetch_html
 from .queries import CATALOG_CAP, SEARCH_QUERIES
 
@@ -50,6 +57,18 @@ def extract_products(html: str) -> list[dict]:
     return items
 
 
+def extract_model_numbers(html: str) -> dict[str, str]:
+    """Maps normalized title -> manufacturer model number, parsed from the
+    page's embedded JSON (each product's "short" title is immediately
+    followed by its manufacturer.modelNumber in that data)."""
+    mapping = {}
+    for m in re.finditer(r'"short":"((?:[^"\\]|\\.)*)".*?"modelNumber":"([^"]*)"', html, re.DOTALL):
+        short_title = m.group(1).replace('\\"', '"').replace("\\\\", "\\")
+        normalized = re.sub(r"\s+", " ", short_title).strip().lower()
+        mapping[normalized] = m.group(2)
+    return mapping
+
+
 async def run():
     conn = db.connect()
     found, saved, failed = 0, 0, 0
@@ -75,13 +94,26 @@ async def run():
                         await asyncio.sleep(random.uniform(3, 6))
                         continue
                     found += 1
-
                     item = items[0]  # best organic match for this search term
+
+                    model_numbers = extract_model_numbers(html)
+                    normalized_title = re.sub(r"\s+", " ", item["title"]).strip().lower()
+                    model_number = model_numbers.get(normalized_title)
+
+                    attrs = attributes.parse(item["title"], brand_hint=term)
+
                     try:
-                        product_id = db.find_or_create_product(cur, term, category, item["title"])
-                        db.upsert_listing_price(cur, product_id, STORE, item["url"], item["price"])
+                        product_id, match_method = db.match_or_create_listing(
+                            cur, category, STORE, item["url"], item["price"], item["title"],
+                            None, model_number, attrs,
+                        )
+                        db.upsert_listing_price(
+                            cur, product_id, STORE, item["url"], item["price"],
+                            match_method, None, model_number, attrs,
+                        )
                         conn.commit()
                         saved += 1
+                        print(f"[{STORE}] saved '{item['title'][:50]}' match_method={match_method}")
                     except Exception as e:
                         conn.rollback()
                         print(f"[{STORE}] FAILED to save '{item['title']}': {e}")

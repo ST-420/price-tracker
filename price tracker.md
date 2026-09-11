@@ -12,7 +12,7 @@ A website where a user searches a phone or laptop and sees:
 - Categories: mobile phones and laptops only
 - Stores: Amazon.com, BestBuy.com, Walmart.com
 - Catalog grows via crawling/discovery (not just the manually-seeded `products.csv`), soft-capped around 500 products to keep scraping volume manageable
-- A product found on one store is matched to the "same" product on another store by the shared search term that discovered it (e.g. both stores' results for "dell xps 13" land on one product row) — not a shared barcode/ID. This replaced an earlier fuzzy title-matching approach that turned out not to work in practice: real listing titles are packed with store-specific marketing copy that differs too much between stores for fuzzy comparison to reliably recognize the same product
+- A listing is matched to an existing product on another store using rules checked in this order (never on raw title similarity): (1) UPC exact match, (2) model number exact match (normalized), (3) brand + parsed model name + storage all match exactly (color may differ; an explicit RAM mismatch rejects). No match on any rule → the listing gets its own unlinked product row rather than being force-paired. `listings.match_method` records which rule fired (or null). See Stack for what each store actually exposes — Amazon and Best Buy each only expose one of UPC/model number, so in practice rule 3 (attributes) is what bridges them; rules 1-2 mostly guard against ever mis-linking two different products, more than they actively connect Amazon-Best Buy pairs today
 - Zero infrastructure cost — free tiers only
 - Owner is a non-coder. Explain every step in plain English. Ask before running anything destructive.
 
@@ -24,7 +24,10 @@ A website where a user searches a phone or laptop and sees:
   - Apify: has ready-made Amazon/Walmart/Best Buy scrapers that dodge bot-detection better, but daily automated use costs real money past the $5/month free credit (e.g. Amazon actor alone ≈ $37/month at 200 products/day) — ruled out to keep the project zero-cost
   - (Scrapy was also tried alongside crawl4ai for discovery crawling, but dropped — its Twisted/pyOpenSSL dependencies conflict with modern `cryptography` and fail to install on this machine; crawl4ai alone covers both discovery and price-fetching anyway)
   - Each store's script fetches one search-results page per term in `scrapers/queries.py` — a single page load carries title+price+link for ~4-20 products at once, so this covers discovery *and* daily price-checking in one pass rather than visiting hundreds of individual product pages
-  - `scrapers/db.py` holds the shared product-matching (by search term, see Scope) and price-recording logic; `scrapers/fetch.py` holds the shared crawl4ai fetch-with-retry helper; `scrapers/run_all.py` runs all three stores, isolating one store's crash from the others (this is what Phase 4's scheduler will call)
+  - Amazon: search page doesn't expose UPC/model number, so its top candidate's own product page is also fetched (one extra request) for UPC + Brand — Amazon has no consistent alphanumeric model-number field across categories, so UPC is its strong identifier
+  - Best Buy: the manufacturer's real model number is already embedded in the search page's own JSON (no extra request needed) — but its product pages are completely blocked from this environment (tested against several real URLs, all failed), so UPC isn't obtainable here
+  - `scrapers/attributes.py` parses brand/model name/storage/RAM/screen size/color out of a title (best-effort — see Scope for how this feeds rule 3)
+  - `scrapers/db.py` holds the matching logic (see Scope) and price-recording; `scrapers/fetch.py` holds the shared crawl4ai fetch-with-retry helper; `scrapers/run_all.py` runs all three stores, isolating one store's crash from the others (this is what Phase 4's scheduler will call)
 - Scheduler: GitHub Actions, runs fetchers once a day
 - Secrets: `.env` file locally, GitHub Secrets and Vercel env vars in production. Never hardcode keys.
 

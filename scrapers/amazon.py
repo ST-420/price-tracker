@@ -2,10 +2,12 @@
 
 For each search term in queries.py, fetches one search-results page (which
 already carries title + price + link for ~20-60 products at once — far
-cheaper than visiting every product page individually), extracts each
-product tile, matches it to an existing product or creates a new one, and
-records its price. Logs and skips anything that fails instead of crashing
-the whole run.
+cheaper than visiting every product page individually) and takes the best
+genuine (non-sponsored, non-refurbished) result. Then visits that one
+product's own detail page for its UPC and Brand fields (Amazon's search
+results don't expose these; its product pages reliably do — see
+price tracker.md > Scope for why this is the identifier used for matching).
+Logs and skips anything that fails instead of crashing the whole run.
 """
 
 import asyncio
@@ -14,7 +16,7 @@ import re
 
 from bs4 import BeautifulSoup
 
-from . import db
+from . import attributes, db
 from .fetch import fetch_html
 from .queries import CATALOG_CAP, SEARCH_QUERIES
 
@@ -62,6 +64,26 @@ def extract_products(html: str) -> list[dict]:
     return items
 
 
+def extract_detail_page_data(html: str) -> dict:
+    """Reads Amazon's product-details key/value tables for UPC and Brand.
+    Amazon doesn't have a consistent alphanumeric "model number" field across
+    categories the way Best Buy does, so this project uses UPC as Amazon's
+    strong identifier (rule 1) instead."""
+    soup = BeautifulSoup(html, "html.parser")
+    kv = {}
+    for table_id in ("#poExpander", "#prodDetails"):
+        el = soup.select_one(table_id)
+        if not el:
+            continue
+        for tr in el.select("tr"):
+            cells = tr.select("td, th")
+            if len(cells) >= 2:
+                key = cells[0].get_text(strip=True).lower()
+                value = cells[1].get_text(strip=True)
+                kv[key] = value
+    return {"upc": kv.get("upc"), "brand": kv.get("brand")}
+
+
 async def run():
     conn = db.connect()
     found, saved, failed = 0, 0, 0
@@ -87,13 +109,34 @@ async def run():
                         await asyncio.sleep(random.uniform(3, 6))
                         continue
                     found += 1
-
                     item = items[0]  # best organic match for this search term
+
+                    attrs = attributes.parse(item["title"], brand_hint=term)
+                    upc = None
+                    await asyncio.sleep(random.uniform(2, 4))
+                    detail_ok, detail_html = await fetch_html(
+                        item["url"], wait_for_selector="#productTitle", magic=False
+                    )
+                    if detail_ok:
+                        detail = extract_detail_page_data(detail_html)
+                        upc = detail["upc"]
+                        if detail["brand"]:
+                            attrs["brand"] = detail["brand"]
+                    else:
+                        print(f"[{STORE}] detail page failed for '{item['title']}' — matching on attributes only")
+
                     try:
-                        product_id = db.find_or_create_product(cur, term, category, item["title"])
-                        db.upsert_listing_price(cur, product_id, STORE, item["url"], item["price"])
+                        product_id, match_method = db.match_or_create_listing(
+                            cur, category, STORE, item["url"], item["price"], item["title"],
+                            upc, None, attrs,
+                        )
+                        db.upsert_listing_price(
+                            cur, product_id, STORE, item["url"], item["price"],
+                            match_method, upc, None, attrs,
+                        )
                         conn.commit()
                         saved += 1
+                        print(f"[{STORE}] saved '{item['title'][:50]}' match_method={match_method}")
                     except Exception as e:
                         conn.rollback()
                         print(f"[{STORE}] FAILED to save '{item['title']}': {e}")
