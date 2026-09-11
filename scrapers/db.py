@@ -129,6 +129,11 @@ def match_or_create_listing(
     )
     row = cur.fetchone()
     if row:
+        if image_url:
+            cur.execute(
+                "UPDATE products SET image_url = %s WHERE id = %s AND image_url IS NULL;",
+                (image_url, row[0]),
+            )
         return row[0], row[1]
 
     match_method = None
