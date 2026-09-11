@@ -48,8 +48,8 @@ A website where a user searches a phone or laptop and sees:
 ### Phase 1 — Setup
 - [x] Create accounts (GitHub, Supabase, Vercel)
 - [ ] Best Buy API key (requested, pending)
-- [ ] Create `products.csv` with ~100 rows: brand, model, category, amazon_url, bestbuy_url, walmart_url
-- [ ] Initialize Next.js project, connect to GitHub
+- [x] Create `products.csv` template (headers + example rows; ~100 real rows to be filled in during Phase 2 research)
+- [x] Initialize Next.js project, connect to GitHub — https://github.com/ST-420/price-tracker
 
 ### Phase 2 — Database
 - [ ] Create the three tables in Supabase
