@@ -56,7 +56,9 @@ def extract_products(html: str) -> list[dict]:
 
         href = link["href"]
         url = href if href.startswith("http") else BASE_URL + href
-        img = card.select_one("img")
+        # Cards can have other <img>s before the real product photo (e.g. a
+        # promo-tag badge SVG) — scope to the actual image container.
+        img = card.select_one('div[data-testid="ProductCard-ProductCardImage-TestID-image"] img')
         items.append({
             "title": title.strip(),
             "price": float(price_match.group(0).replace(",", "")),
