@@ -1,0 +1,28 @@
+name: Daily price check
+
+on:
+  schedule:
+    - cron: "0 9 * * *" # once a day, 9am UTC
+  workflow_dispatch: {} # lets us trigger it manually from the Actions tab, for testing
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install browser (crawl4ai/Playwright)
+        run: python3 -m playwright install --with-deps chromium
+
+      - name: Run scrapers (Amazon, Best Buy, Walmart)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: python3 -m scrapers.run_all
