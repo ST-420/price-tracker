@@ -1,2 +1,9 @@
 psycopg2-binary==2.9.10
 python-dotenv==1.0.1
+
+# Scrapers (Phase 3). crawl4ai's newer releases require cryptography>=49, which
+# has no prebuilt wheel yet on some platforms and fails to compile without a
+# Rust toolchain. Pinning an older pyOpenSSL keeps cryptography on a version
+# (44.x) that has wheels everywhere.
+crawl4ai==0.6.3
+pyOpenSSL==24.3.0

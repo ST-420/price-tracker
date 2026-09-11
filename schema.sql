@@ -1,4 +1,8 @@
--- One row per seeded product (e.g. "iPhone 15").
+-- One row per product. For manually-seeded rows (products.csv), `model` is a
+-- real model name (e.g. "iPhone 15"). For scraper-discovered rows (Phase 3),
+-- `model` holds the search term that found it (e.g. "dell xps 13") — reusing
+-- that term as the match key is what lets the same product discovered on two
+-- different stores land on one row instead of two (see scrapers/db.py).
 CREATE TABLE IF NOT EXISTS products (
     id bigserial PRIMARY KEY,
     brand text NOT NULL,
@@ -8,7 +12,8 @@ CREATE TABLE IF NOT EXISTS products (
     image_url text,
     specs jsonb,
     created_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (brand, model)
+    UNIQUE (brand, model),
+    UNIQUE (category, model)
 );
 
 -- One row per (product, store) pair — where that product is listed and its current price.

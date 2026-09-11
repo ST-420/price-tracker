@@ -11,14 +11,20 @@ A website where a user searches a phone or laptop and sees:
 ## Scope (prototype)
 - Categories: mobile phones and laptops only
 - Stores: Amazon.com, BestBuy.com, Walmart.com
-- ~100 seeded products, no open-ended discovery
+- Catalog grows via crawling/discovery (not just the manually-seeded `products.csv`), soft-capped around 500 products to keep scraping volume manageable
+- A product found on one store is matched to the "same" product on another store by the shared search term that discovered it (e.g. both stores' results for "dell xps 13" land on one product row) — not a shared barcode/ID. This replaced an earlier fuzzy title-matching approach that turned out not to work in practice: real listing titles are packed with store-specific marketing copy that differs too much between stores for fuzzy comparison to reliably recognize the same product
 - Zero infrastructure cost — free tiers only
 - Owner is a non-coder. Explain every step in plain English. Ask before running anything destructive.
 
 ## Stack
 - Website + API: Next.js, deployed on Vercel
 - Database: Supabase (Postgres)
-- Price fetchers: Python scripts using Scrapy (crawling/scheduling/retries) + crawl4ai (browser-based scraping for JS-heavy pages) for Amazon, Best Buy, and Walmart. Both are free/open-source — no daily request cap, unlike hosted scraping APIs (e.g. krawly.io, capped at 30 free requests/day — not enough for ~100 products × 3 stores).
+- Price fetchers/discovery: one Python script per store (`scrapers/amazon.py`, `scrapers/bestbuy.py`, `scrapers/walmart.py`) using crawl4ai (open-source, real headless-browser scraper). Free, self-hosted, no daily request cap — unlike hosted scraping APIs, which were considered and ruled out:
+  - krawly.io: free tier capped at 30 requests/day, not enough for our volume
+  - Apify: has ready-made Amazon/Walmart/Best Buy scrapers that dodge bot-detection better, but daily automated use costs real money past the $5/month free credit (e.g. Amazon actor alone ≈ $37/month at 200 products/day) — ruled out to keep the project zero-cost
+  - (Scrapy was also tried alongside crawl4ai for discovery crawling, but dropped — its Twisted/pyOpenSSL dependencies conflict with modern `cryptography` and fail to install on this machine; crawl4ai alone covers both discovery and price-fetching anyway)
+  - Each store's script fetches one search-results page per term in `scrapers/queries.py` — a single page load carries title+price+link for ~4-20 products at once, so this covers discovery *and* daily price-checking in one pass rather than visiting hundreds of individual product pages
+  - `scrapers/db.py` holds the shared product-matching (by search term, see Scope) and price-recording logic; `scrapers/fetch.py` holds the shared crawl4ai fetch-with-retry helper; `scrapers/run_all.py` runs all three stores, isolating one store's crash from the others (this is what Phase 4's scheduler will call)
 - Scheduler: GitHub Actions, runs fetchers once a day
 - Secrets: `.env` file locally, GitHub Secrets and Vercel env vars in production. Never hardcode keys.
 
@@ -34,9 +40,9 @@ A website where a user searches a phone or laptop and sees:
 - Keys are never pasted into chat
 
 ## Data sources
-- Best Buy: scraper, once a day, low volume, random delays (using scrapers for all three stores for now instead of the official API; can switch Best Buy to the API later once the key comes through)
-- Walmart: scraper, once a day, low volume, random delays
-- Amazon: scraper, once a day, low volume, random delays
+- Amazon: scraper (crawl4ai + real headless browser). Working — a 20-search-term run typically saves ~18-19/20.
+- Best Buy: scraper, same approach (using a scraper for now instead of the official API; can switch to the API later once the key comes through). Working but less consistent — typically saves ~10-12/20 per run; the rest fail because Best Buy's product grid sometimes takes too long to render or the request gets rate-limited. This is expected scraper variability, not a bug to chase further for the prototype.
+- Walmart: scraper, same approach. **Not working** — Walmart's search page returns an interactive "press and hold to verify you're human" challenge on nearly every request from this environment, even with a warmed-up browser session. This project won't try to script around an interactive human-verification widget. `scrapers/walmart.py` exists and runs safely (logs the block, doesn't crash), but currently contributes no data. Worth periodically retrying, or testing from a residential (non-cloud) network connection.
 
 ## Database tables
 - `products` — id, brand, model, category (phone/laptop), name, image_url, specs (json)
@@ -56,11 +62,15 @@ A website where a user searches a phone or laptop and sees:
 - [x] Write a script that imports `products.csv` into `products` and `listings` — `scripts/import_products.py`
 - [x] Verify rows appear in the Supabase dashboard — 4 template products confirmed (no listings yet, since URLs are still blank)
 
-### Phase 3 — Price fetchers (one file per store, using Scrapy + crawl4ai)
-- [ ] `fetch_bestbuy.py` — Scrapy + crawl4ai scraper, updates `listings.current_price` and inserts into `price_history`
-- [ ] `fetch_walmart.py` — Scrapy + crawl4ai scraper
-- [ ] `fetch_amazon.py` — Scrapy + crawl4ai scraper
-- [ ] Each script logs success/failure per product and never crashes the whole run on one bad product
+### Phase 3 — Discovery + price fetchers (`scrapers/`, using crawl4ai)
+- [x] `scrapers/amazon.py` — searches each term in `queries.py`, saves the top genuine (non-sponsored, non-refurbished) result per term. Working: ~18-19/20 terms saved per run.
+- [x] `scrapers/bestbuy.py` — same approach. Working but less reliable: ~10-12/20 terms saved per run (see Data sources).
+- [x] `scrapers/walmart.py` — same approach, but Walmart blocks nearly every request (see Data sources). Runs safely without crashing; saves 0 rows for now.
+- [x] `scrapers/db.py` — matches products across stores by shared search term (see Scope), records price + price history
+- [x] `scrapers/fetch.py` — shared crawl4ai fetch helper with retries and bot-block detection
+- [x] `scrapers/run_all.py` — runs all three stores in sequence; one store crashing doesn't stop the others
+- [x] Verified end-to-end: after a real run, 10 products have genuine listings on both Amazon and Best Buy with different real prices — the core "compare prices across stores" feature works
+- Not done in this phase: Best Buy's official API integration (deferred — see Data sources), a review/undo step for mismatched products (none exists yet)
 
 ### Phase 4 — Scheduler
 - [ ] GitHub Actions workflow runs all three fetchers daily
