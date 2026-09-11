@@ -113,6 +113,7 @@ def match_or_create_listing(
     upc: str | None,
     model_number: str | None,
     attrs: dict,
+    image_url: str | None = None,
 ) -> tuple[int, str | None]:
     """Finds a matching product for this listing (rules 1-3) or creates a new
     one (rule 4). Returns (product_id, match_method)."""
@@ -134,13 +135,18 @@ def match_or_create_listing(
         model_name = attrs.get("model_name") or title
         cur.execute(
             """
-            INSERT INTO products (brand, model, category, name)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO products (brand, model, category, name, image_url)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING id;
             """,
-            (brand, model_name, category, title),
+            (brand, model_name, category, title, image_url),
         )
         product_id = cur.fetchone()[0]
+    elif image_url:
+        cur.execute(
+            "UPDATE products SET image_url = %s WHERE id = %s AND image_url IS NULL;",
+            (image_url, product_id),
+        )
 
     return product_id, match_method
 

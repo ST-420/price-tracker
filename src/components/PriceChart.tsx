@@ -21,7 +21,9 @@ const STORE_COLORS: Record<string, { light: string; dark: string }> = {
 
 const WIDTH = 600;
 const HEIGHT = 260;
-const PADDING = { top: 16, right: 16, bottom: 28, left: 56 };
+// Right padding leaves room for the end-of-line price label so it never gets
+// clipped by the SVG's own edge.
+const PADDING = { top: 16, right: 56, bottom: 28, left: 56 };
 
 export default function PriceChart({ history }: { history: PricePoint[] }) {
   const [hoverX, setHoverX] = useState<number | null>(null);
@@ -57,13 +59,14 @@ export default function PriceChart({ history }: { history: PricePoint[] }) {
 
   if (history.length === 0) {
     return (
-      <p className="text-sm text-zinc-500 dark:text-zinc-500">
+      <p className="text-sm" style={{ color: "var(--text-muted)" }}>
         No price history yet — check back after the daily price check has run a few times.
       </p>
     );
   }
 
   const stores = Array.from(series.byStore.keys());
+  const gridSteps = series.minPrice === series.maxPrice ? [0.5] : [0, 0.5, 1];
 
   return (
     <div>
@@ -74,7 +77,7 @@ export default function PriceChart({ history }: { history: PricePoint[] }) {
               className="h-2.5 w-2.5 rounded-full"
               style={{ backgroundColor: STORE_COLORS[store]?.light ?? "#888" }}
             />
-            <span className="text-zinc-700 dark:text-zinc-300">
+            <span style={{ color: "var(--text-secondary)" }}>
               {STORE_LABELS[store] ?? store}
             </span>
           </div>
@@ -92,7 +95,7 @@ export default function PriceChart({ history }: { history: PricePoint[] }) {
         onMouseLeave={() => setHoverX(null)}
       >
         {/* gridlines */}
-        {[0, 0.5, 1].map((t) => {
+        {gridSteps.map((t) => {
           const y = PADDING.top + t * (HEIGHT - PADDING.top - PADDING.bottom);
           const price = series.maxPrice - t * (series.maxPrice - series.minPrice);
           return (
@@ -102,8 +105,7 @@ export default function PriceChart({ history }: { history: PricePoint[] }) {
                 x2={WIDTH - PADDING.right}
                 y1={y}
                 y2={y}
-                stroke="currentColor"
-                className="text-zinc-200 dark:text-zinc-800"
+                stroke="var(--border)"
                 strokeWidth={1}
               />
               <text
@@ -111,7 +113,8 @@ export default function PriceChart({ history }: { history: PricePoint[] }) {
                 y={y}
                 textAnchor="end"
                 dominantBaseline="middle"
-                className="fill-zinc-500 text-[10px] dark:fill-zinc-500"
+                fill="var(--text-muted)"
+                fontSize={10}
               >
                 ${price.toFixed(0)}
               </text>
@@ -129,8 +132,8 @@ export default function PriceChart({ history }: { history: PricePoint[] }) {
             <g key={store}>
               <path d={path} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
               {/* end marker, with a surface ring so it stays legible over the line */}
-              <circle cx={last.x} cy={last.y} r={5} fill={color} stroke="var(--background)" strokeWidth={2} />
-              <text x={last.x + 8} y={last.y} dominantBaseline="middle" className="fill-current text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+              <circle cx={last.x} cy={last.y} r={5} fill={color} stroke="var(--surface)" strokeWidth={2} />
+              <text x={last.x + 8} y={last.y} dominantBaseline="middle" fontSize={11} fontWeight={500} fill="var(--text-secondary)">
                 ${last.price.toFixed(0)}
               </text>
             </g>
@@ -143,8 +146,7 @@ export default function PriceChart({ history }: { history: PricePoint[] }) {
             x2={hoverX}
             y1={PADDING.top}
             y2={HEIGHT - PADDING.bottom}
-            stroke="currentColor"
-            className="text-zinc-400 dark:text-zinc-600"
+            stroke="var(--text-muted)"
             strokeWidth={1}
           />
         )}

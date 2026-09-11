@@ -56,10 +56,12 @@ def extract_products(html: str) -> list[dict]:
 
         href = link["href"]
         url = href if href.startswith("http") else BASE_URL + href
+        img = card.select_one("img")
         items.append({
             "title": title.strip(),
             "price": float(price_match.group(0).replace(",", "")),
             "url": url.split("?")[0],
+            "image_url": img.get("src") if img else None,
         })
     return items
 
@@ -112,7 +114,7 @@ async def run():
                         try:
                             product_id, match_method = db.match_or_create_listing(
                                 cur, category, STORE, item["url"], item["price"], item["title"],
-                                None, model_number, attrs,
+                                None, model_number, attrs, item.get("image_url"),
                             )
                             db.upsert_listing_price(
                                 cur, product_id, STORE, item["url"], item["price"],

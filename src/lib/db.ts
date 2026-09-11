@@ -88,3 +88,18 @@ export async function getPriceHistory(productId: number): Promise<PricePoint[]> 
   );
   return rows;
 }
+
+export type PriceStats = { lowest: number; highest: number; average: number } | null;
+
+export async function getPriceStats(productId: number): Promise<PriceStats> {
+  const { rows } = await pool.query<{ lowest: string; highest: string; average: string }>(
+    `SELECT min(ph.price) AS lowest, max(ph.price) AS highest, avg(ph.price) AS average
+     FROM price_history ph
+     JOIN listings l ON l.id = ph.listing_id
+     WHERE l.product_id = $1;`,
+    [productId]
+  );
+  const row = rows[0];
+  if (!row || row.lowest === null) return null;
+  return { lowest: Number(row.lowest), highest: Number(row.highest), average: Number(row.average) };
+}
