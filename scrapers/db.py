@@ -79,15 +79,24 @@ def _find_match_by_attributes(cur, category: str, store: str, attrs: dict):
 
     cur.execute(
         """
-        SELECT l.product_id, l.ram FROM listings l JOIN products p ON p.id = l.product_id
+        SELECT l.product_id, l.ram, l.model_name FROM listings l JOIN products p ON p.id = l.product_id
         WHERE p.category = %s AND l.store != %s
             AND lower(l.brand) = lower(%s)
-            AND lower(l.model_name) = lower(%s)
             AND lower(l.storage) = lower(%s);
         """,
-        (category, store, brand, model_name, storage),
+        (category, store, brand, storage),
     )
-    for product_id, existing_ram in cur.fetchall():
+    name = model_name.lower().strip()
+    for product_id, existing_ram, existing_name in cur.fetchall():
+        existing_name = (existing_name or "").lower().strip()
+        # "Exact" model-name match, but tolerant of one title being a fuller
+        # version of the other (e.g. Best Buy's "MacBook Air" vs Amazon's
+        # "2026 MacBook Air with M5 chip Built for AI") — a strict full-string
+        # equality missed real matches like this in practice. Containment
+        # still can't match two genuinely different models, since neither
+        # name is a substring of the other in that case.
+        if name not in existing_name and existing_name not in name:
+            continue
         if ram and existing_ram and ram.lower() != existing_ram.lower():
             continue  # explicit ram mismatch rejects this candidate
         return product_id

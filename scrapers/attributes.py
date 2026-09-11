@@ -57,6 +57,7 @@ def _gb_matches(title: str):
     when specs are packed close together (e.g. "8GB DDR5, 512GB SSD"), which
     would otherwise misclassify both numbers as the same kind of spec."""
     matches = []
+    seen_spans = set()
     for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(GB|TB)\b", title, re.IGNORECASE):
         value = float(m.group(1))
         if m.group(2).upper() == "TB":
@@ -68,6 +69,18 @@ def _gb_matches(title: str):
         clause_end = min(clause_end_candidates) if clause_end_candidates else len(title)
         context = title[clause_start:clause_end].lower()
         matches.append((m.start(), m.end(), value, m.group(0), context))
+        seen_spans.add((m.start(), m.end()))
+
+    # Some titles drop the GB unit before a storage keyword entirely (e.g.
+    # Best Buy's "...FHD 512 SSD DDR4"). Assume GB for a bare number
+    # immediately followed by a storage keyword, since that's the
+    # conventional range for these (128-2048) — a bare number before "RAM"/
+    # "Memory" isn't covered here, so this can't be confused with RAM.
+    for m in re.finditer(r"\b(\d+)\s*(SSD|HDD|eMMC)\b", title, re.IGNORECASE):
+        if any(s <= m.start() < e or s < m.end() <= e for s, e in seen_spans):
+            continue
+        matches.append((m.start(), m.end(), float(m.group(1)), m.group(0), m.group(0).lower()))
+
     return matches
 
 
