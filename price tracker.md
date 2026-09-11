@@ -76,16 +76,16 @@ A website where a user searches a phone or laptop and sees:
 - Not done in this phase: Best Buy's official API integration (deferred — see Data sources), a review/undo step for mismatched products (none exists yet)
 
 ### Phase 4 — Scheduler
-- [ ] GitHub Actions workflow runs all three fetchers daily
-- [ ] Store Supabase and API keys as GitHub Secrets
-- [ ] Confirm price_history grows by one row per listing per day
+- [x] GitHub Actions workflow runs all three fetchers daily — `.github/workflows/daily-price-check.yml`, 9am UTC, also runnable manually from the Actions tab
+- [x] Store Supabase and API keys as GitHub Secrets — `SUPABASE_DB_URL`
+- [ ] Confirm price_history grows by one row per listing per day — first manual run tested end-to-end (real rows landed in Supabase); still need to see the scheduled (not manually-triggered) run fire and repeat over a few real days
 - Start this as early as possible — the chart needs weeks of data
 
 ### Phase 5 — Website
-- [ ] Search page: text box, results list
-- [ ] Product page: details, table of 3 stores with price + link, cheapest highlighted
-- [ ] Price history chart: one line per store
-- [ ] Deploy to Vercel
+- [x] Search page: text box, results list — `src/app/page.tsx`
+- [x] Product page: details, table of 3 stores with price + link, cheapest highlighted — `src/app/product/[id]/page.tsx`. Only listings matched by rules 1-3 are shown (see Scope) — an unmatched single-store listing shows "No verified cross-store listing yet" instead
+- [x] Price history chart: one line per store — `src/components/PriceChart.tsx`
+- [x] Deploy to Vercel — live at https://price-tracker-opal-seven.vercel.app (GitHub auto-deploy-on-push isn't connected yet — Vercel's GitHub App connection failed non-interactively; deploys for now go out via `vercel deploy --prod` when asked)
 
 ### Phase 6 — Demo
 - [ ] Let scheduler run 2–3 weeks
