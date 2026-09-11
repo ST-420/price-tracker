@@ -67,7 +67,12 @@ def extract_products(html: str) -> list[dict]:
         items.append({
             "title": title.strip(),
             "price": float(price_match.group(0).replace(",", "")),
-            "url": url.split("?")[0],
+            # Strip the "/ref=sr_1_N" position-tracking suffix too, not just
+            # the query string — otherwise the same product found at a
+            # different search-result position gets a different URL and the
+            # same-URL dedup check (scrapers/db.py) never catches it as a
+            # repeat, producing duplicate products for the identical ASIN.
+            "url": re.sub(r"/ref=[^/?]*", "", url.split("?")[0]),
             "image_url": img.get("src") if img else None,
         })
     return items
