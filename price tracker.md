@@ -26,15 +26,15 @@ A website where a user searches a phone or laptop and sees:
 - GitHub — created
 - Supabase — created
 - Vercel — created
-- Best Buy Developer — API key requested, waiting for approval
+- Best Buy Developer — API key requested, waiting for approval. Not needed for now — see Data sources.
 
 ## How accounts connect
 - GitHub and Vercel: Claude Code runs a login command, the browser opens, user clicks Authorize
-- Supabase and Best Buy: user pastes connection string / API key into `.env`
+- Supabase: user pastes connection string into `.env`
 - Keys are never pasted into chat
 
 ## Data sources
-- Best Buy: official API
+- Best Buy: scraper, once a day, low volume, random delays (using scrapers for all three stores for now instead of the official API; can switch Best Buy to the API later once the key comes through)
 - Walmart: scraper, once a day, low volume, random delays
 - Amazon: scraper, once a day, low volume, random delays
 
@@ -47,7 +47,7 @@ A website where a user searches a phone or laptop and sees:
 
 ### Phase 1 — Setup
 - [x] Create accounts (GitHub, Supabase, Vercel)
-- [ ] Best Buy API key (requested, pending)
+- [ ] Best Buy API key (requested, pending — not needed for now, using a scraper instead)
 - [x] Create `products.csv` template (headers + example rows; ~100 real rows to be filled in during Phase 2 research)
 - [x] Initialize Next.js project, connect to GitHub — https://github.com/ST-420/price-tracker
 
@@ -57,7 +57,7 @@ A website where a user searches a phone or laptop and sees:
 - [ ] Verify rows appear in the Supabase dashboard
 
 ### Phase 3 — Price fetchers (one file per store)
-- [ ] `fetch_bestbuy.py` — uses API, updates `listings.current_price` and inserts into `price_history`
+- [ ] `fetch_bestbuy.py` — scraper, updates `listings.current_price` and inserts into `price_history`
 - [ ] `fetch_walmart.py` — scraper
 - [ ] `fetch_amazon.py` — scraper
 - [ ] Each script logs success/failure per product and never crashes the whole run on one bad product
