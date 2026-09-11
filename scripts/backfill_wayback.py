@@ -124,33 +124,43 @@ def timestamp_to_datetime(ts: str) -> datetime:
     return datetime.strptime(ts, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
 
 
+def db_connect():
+    return psycopg2.connect(os.environ["SUPABASE_DB_URL"], connect_timeout=10)
+
+
 def main():
-    conn = psycopg2.connect(os.environ["SUPABASE_DB_URL"], connect_timeout=10)
     products_backfilled = set()
     total_points = 0
 
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, product_id, store, url FROM listings WHERE store IN ('amazon', 'bestbuy') ORDER BY id;"
-            )
-            listings = cur.fetchall()
+    conn = db_connect()
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, product_id, store, url FROM listings WHERE store IN ('amazon', 'bestbuy') ORDER BY id;"
+        )
+        listings = cur.fetchall()
+    conn.close()
 
-        print(f"Backfilling {len(listings)} listings from Wayback Machine (last {LOOKBACK_DAYS} days)...")
+    print(f"Backfilling {len(listings)} listings from Wayback Machine (last {LOOKBACK_DAYS} days)...")
 
-        for listing_id, product_id, store, url in listings:
-            canonical = canonicalize_url(store, url)
-            try:
-                snapshots = list_snapshots(canonical)
-            except Exception as e:
-                print(f"[{store}] listing {listing_id}: CDX lookup failed: {e}")
-                continue
+    for listing_id, product_id, store, url in listings:
+        canonical = canonicalize_url(store, url)
+        try:
+            snapshots = list_snapshots(canonical)
+        except Exception as e:
+            print(f"[{store}] listing {listing_id}: CDX lookup failed: {e}")
+            continue
 
-            if not snapshots:
-                print(f"[{store}] listing {listing_id}: no snapshots found")
-                continue
+        if not snapshots:
+            print(f"[{store}] listing {listing_id}: no snapshots found")
+            continue
 
-            inserted_for_listing = 0
+        # A fresh connection per listing — the archive.org fetches below can
+        # take a couple of minutes for a listing with many snapshots, long
+        # enough that Supabase's pooler has been seen to drop an idle
+        # connection held open the whole run.
+        conn = db_connect()
+        inserted_for_listing = 0
+        try:
             for timestamp, original_url in snapshots:
                 recorded_at = timestamp_to_datetime(timestamp)
                 with conn.cursor() as cur:
@@ -179,16 +189,28 @@ def main():
                     total_points += 1
 
                 time.sleep(REQUEST_DELAY_SECONDS)  # go easy on archive.org / this env's connection limits
+        finally:
+            conn.close()
 
-            if inserted_for_listing:
-                products_backfilled.add(product_id)
-                print(f"[{store}] listing {listing_id}: {inserted_for_listing} price points backfilled")
-            else:
-                print(f"[{store}] listing {listing_id}: {len(snapshots)} snapshots found, none had an extractable price")
-    finally:
-        conn.close()
+        if inserted_for_listing:
+            products_backfilled.add(product_id)
+            print(f"[{store}] listing {listing_id}: {inserted_for_listing} price points backfilled")
+        else:
+            print(f"[{store}] listing {listing_id}: {len(snapshots)} snapshots found, none had an extractable price")
 
-    print(f"\nDone. {len(products_backfilled)} products backfilled, {total_points} total price points inserted.")
+    conn = db_connect()
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(DISTINCT l.product_id), count(*) FROM listings l "
+            "JOIN price_history ph ON ph.listing_id = l.id WHERE ph.source = 'wayback';"
+        )
+        cumulative_products, cumulative_points = cur.fetchone()
+    conn.close()
+
+    print(
+        f"\nThis run: {len(products_backfilled)} products backfilled, {total_points} new price points inserted.\n"
+        f"Cumulative total (all runs): {cumulative_products} products have wayback data, {cumulative_points} price points."
+    )
 
 
 if __name__ == "__main__":
