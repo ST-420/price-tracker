@@ -57,11 +57,22 @@ export default function PriceChart({ history }: { history: PricePoint[] }) {
     return { byStore, minPrice, maxPrice };
   }, [history]);
 
-  if (history.length === 0) {
+  const maxPointsInAnySeries = Math.max(0, ...Array.from(series.byStore.values()).map((p) => p.length));
+
+  if (history.length === 0 || maxPointsInAnySeries < 2) {
+    // A single point per line has no line to draw — just one floating dot,
+    // which reads as broken rather than "not enough data yet."
     return (
-      <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-        No price history yet — check back after the daily price check has run a few times.
-      </p>
+      <div>
+        {history.length > 0 && (
+          <p className="mb-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+            Current: ${Number(history[0].price).toFixed(2)}
+          </p>
+        )}
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          Not enough price history yet to chart a trend — check back after a few more scrapes.
+        </p>
+      </div>
     );
   }
 
