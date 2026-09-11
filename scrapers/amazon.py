@@ -26,7 +26,9 @@ BASE_URL = "https://www.amazon.com"
 
 
 SKIP_TITLE_WORDS = ("renewed", "refurbished", "used", "open box", "pre-owned")
-
+# A monthly installment/financing figure shown in the same price slot as the
+# full price would misread as an implausibly cheap phone or laptop.
+MIN_PLAUSIBLE_PRICE = 30
 
 CANDIDATES_PER_TERM = 3
 
@@ -61,12 +63,16 @@ def extract_products(html: str) -> list[dict]:
         if any(word in title.lower() for word in SKIP_TITLE_WORDS):
             continue
 
+        price = float(price_match.group(0).replace(",", ""))
+        if price < MIN_PLAUSIBLE_PRICE:
+            continue
+
         href = link["href"]
         url = href if href.startswith("http") else BASE_URL + href
         img = card.select_one("img.s-image")
         items.append({
             "title": title.strip(),
-            "price": float(price_match.group(0).replace(",", "")),
+            "price": price,
             # Strip the "/ref=sr_1_N" position-tracking suffix too, not just
             # the query string — otherwise the same product found at a
             # different search-result position gets a different URL and the

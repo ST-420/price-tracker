@@ -44,11 +44,15 @@ def extract_products(html: str) -> list[dict]:
         if not title or not price_match:
             continue
 
+        price = float(price_match.group(0).replace(",", ""))
+        if price < 30:  # a real phone/laptop is never this cheap — likely a misread installment price
+            continue
+
         href = link["href"]
         url = href if href.startswith("http") else BASE_URL + href
         items.append({
             "title": title.strip(),
-            "price": float(price_match.group(0).replace(",", "")),
+            "price": price,
             "url": url.split("?")[0],
         })
     return items

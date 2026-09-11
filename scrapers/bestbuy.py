@@ -24,6 +24,11 @@ BASE_URL = "https://www.bestbuy.com"
 
 
 SKIP_TITLE_WORDS = ("renewed", "refurbished", "used", "open box", "pre-owned", "geek squad certified")
+# Carrier-locked listings sometimes show a monthly installment figure (e.g.
+# "$16.66/mo") in the same price slot as the full price — a real phone or
+# laptop is never actually this cheap, so treat anything below this as a
+# misread rather than a real price.
+MIN_PLAUSIBLE_PRICE = 30
 
 
 CANDIDATES_PER_TERM = 5
@@ -54,6 +59,10 @@ def extract_products(html: str) -> list[dict]:
         if any(word in title.lower() for word in SKIP_TITLE_WORDS):
             continue
 
+        price = float(price_match.group(0).replace(",", ""))
+        if price < MIN_PLAUSIBLE_PRICE:
+            continue
+
         href = link["href"]
         url = href if href.startswith("http") else BASE_URL + href
         # Cards can have other <img>s before the real product photo (e.g. a
@@ -61,7 +70,7 @@ def extract_products(html: str) -> list[dict]:
         img = card.select_one('div[data-testid="ProductCard-ProductCardImage-TestID-image"] img')
         items.append({
             "title": title.strip(),
-            "price": float(price_match.group(0).replace(",", "")),
+            "price": price,
             "url": url.split("?")[0],
             "image_url": img.get("src") if img else None,
         })
